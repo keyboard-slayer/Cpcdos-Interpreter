@@ -8,7 +8,7 @@ This project is a small interpreter made for the sake of testing your CC+ script
 
 ### Building the Project
 
-Run `cargo run` and voilà !
+Run `cargo build` and voilà !
 
 ### Usage
 
