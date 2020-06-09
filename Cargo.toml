@@ -1,7 +1,7 @@
 [package]
 name = "CPCDOS-Interpreter"
 version = "0.1.0"
-authors = ["Jordan"]
+authors = ["0v3rl0w (Jordan D)"]
 edition = "2018"
 description = "A toy interpreter for interpreting CpcdosC+"
 homepage = "https://github.com/0v3rl0w/Cpcdos-Interpreter"
