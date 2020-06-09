@@ -19,8 +19,11 @@
 use std::{env, process, fs, io};
 use std::io::prelude::*;
 
+mod interpreter;
+pub mod parser;
+
 fn read_script(filename: &str) -> io::Result<String> {
-    let mut file = fs::File::open(filename)?;
+    let file = fs::File::open(filename)?;
     let mut buf_reader = io::BufReader::new(file);
     let mut script = String::new();
     
@@ -40,8 +43,8 @@ fn main() {
 
     match script {
         Ok(content) => {
-            println!("{}", content);
-            //parse(&content);
+            interpreter::interpret(&content);
+            process::exit(0);
         },
 
         Err(content) => {
