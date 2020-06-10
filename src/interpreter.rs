@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::parser::{tokenize, Type, Token};
-use std::process::Command;
+use crate::parser::{tokenize, Type, Token, tokens_contain, tokens_retrieve};
+use std::{process::Command, collections::HashMap};
 
 pub fn interpret(script: &str) {
     let lines = script.lines();
+    let mut variables = HashMap::new();
 
     for line in lines {
         let words = line.split_whitespace();
@@ -31,7 +32,6 @@ pub fn interpret(script: &str) {
         }
 
         match tokens[0].get_type() {
-
             Type::ARG | Type::EQ | Type::COLON => {
                 println!("Syntax error !");
             },
@@ -40,19 +40,36 @@ pub fn interpret(script: &str) {
                 if let Some((_, args)) = tokens.split_first_mut() {
                     for arg in args {
                         if arg.get_type() == Type::ARG {
-                            print!("{} ", arg.get_value());
+                            if arg.is_variable() {
+                                if let Some(varvalue) = variables.get(arg.get_varname()) {
+                                    print!("{} ", varvalue);
+                                } else {
+                                    eprintln!("Variable {} not found !", arg.get_varname());
+                                    std::process::exit(1)
+                                }
+                            } else {
+                                print!("{} ", arg.get_value());
+                            }
                         }
                     }
-
+    
                     print!("\n");
                 }
             },
 
-
             Type::IF => println!("If"),
             Type::THEN | Type::THENCOLON => println!("Then"),
             Type::ELSE => println!("Else"),
-            Type::FIX => println!("Fix"),
+
+            Type::FIX => {
+                if tokens_contain(tokens.clone(), &[Type::FIX, Type::ARG, Type::EQ, Type::ARG]) {
+                    if let Ok(mut key) = tokens_retrieve(tokens.clone(), Type::ARG, 0) {
+                        if let Ok(mut value) = tokens_retrieve(tokens.clone(), Type::ARG, -1) {
+                            variables.insert(key.get_value(), value.get_value());
+                        }
+                    }
+                }
+            }
 
             Type::CLS => {
                 if cfg!(unix) {
