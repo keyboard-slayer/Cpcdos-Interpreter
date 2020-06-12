@@ -1,0 +1,8 @@
+' This is a test
+
+TXT/ HELLO WORLD !
+FIX/ A = /C(5+5)
+FIX/ B = /C(6 * 6)
+TXT/ The variable A is eq to %A%
+TXT/ The variable B is eq to %B%
+TXT/ 1 + 1 = /C(1 + 1)

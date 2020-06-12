@@ -17,11 +17,12 @@
  */
 
 use std::result;
+use mexprp;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq)]
 pub struct Token {
-    token_type: Type,
-    value: String
+    pub token_type: Type,
+    pub value: String
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
@@ -36,7 +37,80 @@ pub enum Type {
     COMMENT,
     ARG,
     FIX,
-    EQ
+    EQ,
+    MATHOP,
+    PARENTOPEN,
+    PARENTCLOSE
+}
+
+pub trait HasMathOperator {
+    fn has_math_operator(&mut self) -> bool;
+    fn do_math(&mut self) -> result::Result<(), mexprp::errors::EvalError>;
+    fn get_index(&mut self, token: &mut Token) -> usize;
+}
+
+impl HasMathOperator for std::vec::Vec<Token> {
+    fn has_math_operator(&mut self) -> bool {
+        for token in self {
+           if token.token_type == Type::MATHOP {
+               return true;
+           } 
+        }
+
+        false
+    }
+
+    fn get_index(&mut self, token: &mut Token) -> usize {
+        let mut return_value: usize = 0;
+        for (index, token_tmp) in self.iter().enumerate() {
+            if token == token_tmp {
+                return_value = index;
+            }
+        }
+
+        return_value
+    }
+
+    fn do_math(&mut self) -> result::Result<(), mexprp::errors::EvalError> {
+        let mut has_found = false;
+        let mut found_first_index = false;
+        let mut math = String::new();
+        let mut index: usize = 0; 
+        let mut toremove: Vec<usize> = Vec::new();
+
+        for (current_index, token) in self.iter().enumerate() {
+            if token.token_type == Type::MATHOP {
+                has_found = true;
+            }
+            
+            if has_found {
+                math.push_str(&token.value);
+                
+                if !found_first_index {
+                    index = current_index;
+                    found_first_index = true;
+                } else{
+                    toremove.push(current_index);
+                }
+            }
+            
+            
+            if token.value.chars().last().unwrap() == ')' {
+                break;
+            }
+        }
+        
+        for remove in toremove.iter().rev() {
+            self.remove(*remove);
+        }
+
+        let math_expr =  math.to_uppercase().replace("/C(", "").replace(")", "");
+        let final_value = mexprp::eval::<f64>(&math_expr)?;
+        self[index] = Token {token_type: Type::ARG, value: final_value.to_string()};
+
+        Ok(())
+
+    }
 }
 
 impl Token {
@@ -128,7 +202,15 @@ pub fn tokenize(words: std::str::SplitWhitespace) -> Vec<Token> {
             "FIX/" => Type::FIX,
             ":" => Type::COLON,
             "=" => Type::EQ,
-            _ => Type::ARG
+            "(" => Type::PARENTOPEN,
+            ")" => Type::PARENTCLOSE,
+            _ => {
+                if word.starts_with("/C(") {
+                    Type::MATHOP
+                } else {
+                    Type::ARG
+                }
+            }
         };
 
         let token: Token = Token {token_type: token_type, value: word.to_string()};

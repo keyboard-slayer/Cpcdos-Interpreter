@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::parser::{tokenize, Type, Token, tokens_contain, tokens_retrieve};
+use crate::parser::{tokenize, Type, Token, tokens_contain, tokens_retrieve, HasMathOperator};
 use std::{process::Command, collections::HashMap};
 
 pub fn interpret(script: &str) {
     let lines = script.lines();
     let mut variables = HashMap::new();
 
-    for line in lines {
+    for (line_nbr, line) in lines.enumerate() {
         let words = line.split_whitespace();
         let mut tokens: Vec<Token> = tokenize(words);
         
@@ -31,36 +31,48 @@ pub fn interpret(script: &str) {
             continue;
         }
 
-        match tokens[0].get_type() {
-            Type::ARG | Type::EQ | Type::COLON => {
-                println!("Syntax error !");
-            },
+        if tokens.has_math_operator() {
+            if let Err(_) = tokens.do_math() {
+                eprintln!("LINE {}: Failed to evaluate expression", line_nbr+1);
+            }
+        }
 
+        match tokens[0].get_type() {
             Type::TXT => {
                 if let Some((_, args)) = tokens.split_first_mut() {
                     for arg in args {
-                        if arg.get_type() == Type::ARG {
-                            if arg.is_variable() {
-                                if let Some(varvalue) = variables.get(arg.get_varname()) {
-                                    print!("{} ", varvalue);
-                                } else {
-                                    eprintln!("Variable {} not found !", arg.get_varname());
-                                    std::process::exit(1)
+                        match arg.get_type() {
+                            Type::ARG => {
+                                if arg.is_variable() {
+                                    if let Some(varvalue) = variables.get(arg.get_varname()) {
+                                        print!("{} ", varvalue);
+                                    } 
+                                    
+                                    else {
+                                        eprintln!("LINE {}: Variable {} not found !",line_nbr+1, arg.get_varname());
+                                        std::process::exit(1)
+                                    }
+                                } 
+                                
+                                else {
+                                    print!("{} ", arg.get_value());
                                 }
-                            } else {
+                            }
+
+                            _ => {
                                 print!("{} ", arg.get_value());
                             }
                         }
                     }
-    
+                    
                     print!("\n");
                 }
             },
-
+            
             Type::IF => println!("If"),
             Type::THEN | Type::THENCOLON => println!("Then"),
             Type::ELSE => println!("Else"),
-
+            
             Type::FIX => {
                 if tokens_contain(tokens.clone(), &[Type::FIX, Type::ARG, Type::EQ, Type::ARG]) {
                     if let Ok(mut key) = tokens_retrieve(tokens.clone(), Type::ARG, 0) {
@@ -70,19 +82,23 @@ pub fn interpret(script: &str) {
                     }
                 }
             }
-
+            
             Type::CLS => {
                 if cfg!(unix) {
                     let output = Command::new("clear").output().unwrap_or_else(|e| {
                         panic!("Don't know what to do! {}", e)
                     });
-
+                    
                     print!("{}", String::from_utf8_lossy(&output.stdout));
                 }
             }
-
+            
             Type::COMMENT => {}
-        };
 
+            _ => {
+                println!("Syntax error !");
+            },
+        };
+        
     }
 }
