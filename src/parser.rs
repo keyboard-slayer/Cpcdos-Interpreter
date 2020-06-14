@@ -35,18 +35,26 @@ pub enum Type {
     ELSE,
     COLON,
     COMMENT,
-    ARG,
+    TEXT,
     FIX,
     EQ,
     MATHOP,
     PARENTOPEN,
-    PARENTCLOSE
+    PARENTCLOSE, 
+    ENDIF,
+    QUOTE,
+    ARG
 }
 
 pub trait HasMathOperator {
     fn has_math_operator(&mut self) -> bool;
     fn do_math(&mut self) -> result::Result<(), mexprp::errors::EvalError>;
     fn get_index(&mut self, token: &mut Token) -> usize;
+}
+
+pub trait TokenOperation {
+    fn contain(&mut self, token_type: &[Type]) -> bool;
+    fn retrieve(&mut self, token_type: Type, index: isize) -> result::Result<Token, String>;
 }
 
 impl HasMathOperator for std::vec::Vec<Token> {
@@ -106,12 +114,64 @@ impl HasMathOperator for std::vec::Vec<Token> {
 
         let math_expr =  math.to_uppercase().replace("/C(", "").replace(")", "");
         let final_value = mexprp::eval::<f64>(&math_expr)?;
-        self[index] = Token {token_type: Type::ARG, value: final_value.to_string()};
+        self[index] = Token {token_type: Type::TEXT, value: final_value.to_string()};
 
         Ok(())
 
     }
 }
+
+impl TokenOperation for std::vec::Vec<Token> {
+    fn contain(&mut self, token_types: &[Type]) -> bool {
+        let mut return_value: bool = true;
+    
+        for (index, token) in token_types.iter().enumerate() {
+            if self[index].get_type() != *token {
+                return_value = false;
+            }
+        }
+    
+        for index in token_types.len()..self.len() {
+            if self[index].get_type() != token_types[token_types.len()-1] {
+                return_value = false;
+            }
+        }
+    
+        return_value
+    }
+    
+    fn retrieve(&mut self, token_type: Type, index: isize) -> result::Result<Token, String> {
+        let mut counter = 0;
+        let mut tmp_tokens = self.clone();
+    
+        if index == -1 {
+            let mut value: String = String::from("");
+            let mut i: usize = 0;
+            tmp_tokens.reverse();
+    
+            while tmp_tokens[i].get_type() == token_type {
+                value.push_str(&tmp_tokens[i].get_value());
+                i += 1;
+                value.push_str(" ");
+            }
+    
+            return Ok(Token{token_type: token_type, value: value[..value.len()-1].to_string()});
+        }
+    
+        for mut token in tmp_tokens {
+            if token.get_type() == token_type {
+                if counter < index{
+                    counter += 1
+                } else {
+                    return Ok(token);
+                }
+            }
+        }
+    
+        Err("Couldn't retrieve the element !".to_string())
+    }
+}
+
 
 impl Token {
     pub fn get_value(&mut self) -> String {
@@ -139,76 +199,32 @@ impl Token {
     }
 }
 
-pub fn tokens_contain(mut tokens: Vec<Token>, token_types: &[Type]) -> bool {
-    let mut return_value: bool = true;
-
-    for (index, token) in token_types.iter().enumerate() {
-        if tokens[index].get_type() != *token {
-            return_value = false;
-        }
-    }
-
-    for index in token_types.len()..tokens.len() {
-        if tokens[index].get_type() != token_types[token_types.len()-1] {
-            return_value = false;
-        }
-    }
-
-    return_value
-}
-
-
-pub fn tokens_retrieve(mut tokens: Vec<Token>, token_type: Type, index: isize) -> result::Result<Token, String> {
-    let mut counter = 0;
-
-    if index == -1 {
-        let mut value: String = String::from("");
-        let mut i: usize = 0;
-        tokens.reverse();
-
-        while tokens[i].get_type() == token_type {
-            value.push_str(&tokens[i].get_value());
-            i += 1;
-            value.push_str(" ");
-        }
-
-        return Ok(Token{token_type: token_type, value: value[..value.len()-1].to_string()});
-    }
-
-    for mut token in tokens {
-        if token.get_type() == token_type {
-            if counter < index{
-                counter += 1
-            } else {
-                return Ok(token);
-            }
-        }
-    }
-
-    Err("Couldn't retrieve the element !".to_string())
-}
 
 pub fn tokenize(words: std::str::SplitWhitespace) -> Vec<Token> {
     let mut v: Vec<Token> = Vec::new();
     for word in words {
         let token_type: Type = match word.to_uppercase().as_str() {
-            "REM/" | "\'" | "//" => Type::COMMENT,
-            "CLS/" => Type::CLS,
-            "TXT/" => Type::TXT,
-            "IF/" => Type::IF,
-            "THEN:" => Type::THENCOLON,
-            "THEN" => Type::THEN,
-            "ELSE/" => Type::ELSE,
-            "FIX/" => Type::FIX,
-            ":" => Type::COLON,
-            "=" => Type::EQ,
-            "(" => Type::PARENTOPEN,
-            ")" => Type::PARENTCLOSE,
+            "REM/"    | "\'" | "//" => Type::COMMENT,
+            "CLS/"                  => Type::CLS,
+            "TXT/"                  => Type::TXT,
+            "IF/"     | "SI/"       => Type::IF,
+            "THEN:"   | "ALORS:"    => Type::THENCOLON,
+            "THEN"    | "ALORS"     => Type::THEN,
+            "ELSE/"   | "SINON/"    => Type::ELSE,
+            "FIX/"    | "SET/"      => Type::FIX,
+            "END/ IF" | "FIN/ SI"   => Type::ENDIF,
+            ":"                     => Type::COLON,
+            "="                     => Type::EQ,
+            "("                     => Type::PARENTOPEN,
+            ")"                     => Type::PARENTCLOSE,
+            "\""                    => Type::QUOTE,
             _ => {
                 if word.starts_with("/C(") {
                     Type::MATHOP
-                } else {
+                } else if word.starts_with("/") || word.starts_with("\\") {
                     Type::ARG
+                } else {
+                    Type::TEXT
                 }
             }
         };

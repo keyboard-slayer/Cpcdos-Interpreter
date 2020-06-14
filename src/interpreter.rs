@@ -16,24 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::parser::{tokenize, Type, Token, tokens_contain, tokens_retrieve, HasMathOperator};
-use std::{process::Command, collections::HashMap};
+use crate::parser::{tokenize, Type, Token, TokenOperation, HasMathOperator};
+use std::{process::Command, collections::HashMap, io::prelude::*};
 
-pub fn interpret(script: &str) {
+
+pub fn interpret(script: &str, lineNbr: usize) {
     let lines = script.lines();
     let mut variables = HashMap::new();
-
+    
     for (line_nbr, line) in lines.enumerate() {
         let words = line.split_whitespace();
+        let mut buffer: String = String::new();
         let mut tokens: Vec<Token> = tokenize(words);
-        
+        let mut ifcode: Vec<String> = Vec::new();
+        let mut inif: bool = false;
+        let mut newline: bool = true;
+
         if tokens.len() == 0 {
             continue;
         }
 
         if tokens.has_math_operator() {
             if let Err(_) = tokens.do_math() {
-                eprintln!("LINE {}: Failed to evaluate expression", line_nbr+1);
+                eprintln!("LINE {}: Failed to evaluate expression", line_nbr+lineNbr+1);                    
+                std::process::exit(1);
             }
         }
 
@@ -43,14 +49,36 @@ pub fn interpret(script: &str) {
                     for arg in args {
                         match arg.get_type() {
                             Type::ARG => {
+                                let value: &str = &arg.get_value();
+                                match value {
+                                    "/#R" => newline = false,
+
+                                    "\\#PAUSE" => {
+                                        print!("\n");
+                                        let mut unuse = String::new();
+                                        std::io::stdin().read_line(&mut unuse);
+                                        break;
+                                    },
+
+                                    "\\%" => {
+                                        print!("%");
+                                    }
+
+                                    _ => {
+                                        print!("{}", value);
+                                    }
+                                }
+                            }
+
+                            Type::TEXT => {
                                 if arg.is_variable() {
                                     if let Some(varvalue) = variables.get(arg.get_varname()) {
                                         print!("{} ", varvalue);
                                     } 
                                     
                                     else {
-                                        eprintln!("LINE {}: Variable {} not found !",line_nbr+1, arg.get_varname());
-                                        std::process::exit(1)
+                                        eprintln!("LINE {}: Variable {} not found !",line_nbr+lineNbr+1, arg.get_varname());
+                                        std::process::exit(1);
                                     }
                                 } 
                                 
@@ -65,18 +93,30 @@ pub fn interpret(script: &str) {
                         }
                     }
                     
-                    print!("\n");
+                    if newline {
+                        print!("\n");
+                    }
                 }
             },
             
             Type::IF => println!("If"),
             Type::THEN | Type::THENCOLON => println!("Then"),
             Type::ELSE => println!("Else"),
+
+            Type::ENDIF => {
+                if inif {
+                    inif = false;
+                    interpret(&ifcode.join("\n"), line_nbr);
+                    ifcode = Vec::new();
+                } else {
+                    println!("LINE {}: Not in a if statement !", line_nbr+lineNbr+1);
+                }
+            }
             
             Type::FIX => {
-                if tokens_contain(tokens.clone(), &[Type::FIX, Type::ARG, Type::EQ, Type::ARG]) {
-                    if let Ok(mut key) = tokens_retrieve(tokens.clone(), Type::ARG, 0) {
-                        if let Ok(mut value) = tokens_retrieve(tokens.clone(), Type::ARG, -1) {
+                if tokens.contain(&[Type::FIX, Type::TEXT, Type::EQ, Type::TEXT]) {
+                    if let Ok(mut key) = tokens.retrieve(Type::TEXT, 0) {
+                        if let Ok(mut value) = tokens.retrieve(Type::TEXT, -1) {
                             variables.insert(key.get_value(), value.get_value());
                         }
                     }

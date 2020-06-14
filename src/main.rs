@@ -43,7 +43,7 @@ fn main() {
 
     match script {
         Ok(content) => {
-            interpreter::interpret(&content);
+            interpreter::interpret(&content, 0);
             process::exit(0);
         },
 
