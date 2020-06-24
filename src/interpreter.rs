@@ -54,8 +54,8 @@ pub fn interpret(script: &str, lineNbr: usize) {
                                     "/#R" => newline = false,
 
                                     "\\#PAUSE" => {
-                                        print!("\n");
                                         let mut unuse = String::new();
+                                        std::io::stdout().flush();
                                         std::io::stdin().read_line(&mut unuse);
                                         break;
                                     },
